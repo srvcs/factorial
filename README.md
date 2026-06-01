@@ -1,56 +1,65 @@
 # srvcs-factorial
 
-The factorial orchestrator of the srvcs.cloud distributed standard library.
+## Name
 
-Its single concern: **`value!`** (factorial). It does no arithmetic of its own.
-It folds a counted loop over `2..=value`, asking
-[`srvcs-multiply`](https://github.com/srvcs/multiply) for each partial product:
+| Field | Value |
+| --- | --- |
+| Service | `srvcs-factorial` |
+| Slug | `factorial` |
+| Repository | `srvcs/factorial` |
+| Package | `srvcs-factorial` |
+| Kind | `orchestrator` |
 
-```
-acc = 1
-for i in 2..=value: acc = multiply(acc, i)
-```
+## Function
 
-So `0! == 1` and `1! == 1` (the loop body never runs). A negative input has no
-factorial and is rejected with `422`.
+arithmetic: factorial
+
+## Dependencies
+
+| Dependency | Repository |
+| --- | --- |
+| `srvcs-multiply` | [srvcs/multiply](https://github.com/srvcs/multiply) |
 
 ## API
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/` | Service identity, concern, and dependency list |
-| `POST` | `/` | Compute `value!` |
-| `GET` | `/healthz` `/readyz` `/metrics` `/openapi.json` | srvcs service standard surface |
+| `GET` | `/` | Service identity |
+| `POST` | `/` | Evaluate the service function |
+| `GET` | `/healthz` | Liveness probe |
+| `GET` | `/readyz` | Readiness probe |
+| `GET` | `/metrics` | Prometheus metrics |
+| `GET` | `/openapi.json` | OpenAPI document |
 
-```sh
-curl -s -X POST localhost:8080/ -H 'content-type: application/json' -d '{"value": 5}'
-# {"value":5,"result":120}
-```
+## Inputs
 
-Responses:
+| Name | Type | Required |
+| --- | --- | --- |
+| `value` | `json` | yes |
 
-- `200 {"value": v, "result": r}` — evaluated.
-- `422 {"error": "factorial of a negative number"}` — negative input (or a
-  non-integer value).
-- `503` — the multiply dependency is unavailable.
+## Outputs
 
-## Dependencies
-
-- [`srvcs-multiply`](https://github.com/srvcs/multiply)
-
-A single request here fans out across the dependency graph: computing `5!`
-makes four sequential `srvcs-multiply` calls (`1*2`, `2*3`, `6*4`, `24*5`).
+| Name | Type |
+| --- | --- |
+| `value` | `json` |
+| `result` | `integer` |
 
 ## Configuration
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `SRVCS_BIND_ADDR` | `0.0.0.0:8080` | Bind address |
-| `SRVCS_MULTIPLY_URL` | `http://127.0.0.1:8086` | Base URL of `srvcs-multiply` |
 | `SRVCS_ENV` | `development` | Environment label for logs |
 | `RUST_LOG` | `info,tower_http=info` | Tracing filter |
+| `SRVCS_MULTIPLY_URL` | `http://127.0.0.1:8086` | Base URL for srvcs-multiply |
 
-## Local checks
+## Error Behavior
+
+- `422` means the request could not be evaluated for the documented input shape.
+- `503` means a required dependency was unavailable or returned an unexpected response.
+- Dependency validation errors are forwarded when this service delegates validation.
+
+## Local Checks
 
 ```sh
 cargo fmt --check
@@ -58,11 +67,8 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-Orchestration tests stand up a mock `srvcs-multiply` service in-process that
-actually **computes** `a * b`, so the counted-loop logic is genuinely
-exercised: `5! == 120`, `0! == 1`, `1! == 1`, plus a negative `422` and a
-degraded dependency (`503`). See
-[`srvcs/platform`](https://github.com/srvcs/platform) for the shared standard.
+See the [srvcs service standard](https://github.com/srvcs/platform/blob/main/STANDARD.md) for the full operational contract.
 
-> Note: the `cargoHash` in `flake.nix` is inherited from the template and must be
-> refreshed with a `nix build` before the Nix gates pass.
+## Metadata
+
+Machine-readable service metadata lives in `srvcs.yaml`. Keep it aligned with this README when the service contract changes.
